@@ -1,5 +1,5 @@
 from collections import Counter
-from collections import defaultdict
+import numpy as np
 import pandas as pd
 from sklearn import model_selection
 from sklearn.cluster import KMeans
@@ -27,31 +27,22 @@ def data_preprocess(intrests_list):
     data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
     # merge duplicate columns
     x = Counter(data1.columns[1:])
-    col = []
-    index = defaultdict(list)
+    col = {}
     for k in x:
         if x[k] > 1:
-            col.append(k)
+            col[k] = x[k]
     for i in col:
-        for x, y in enumerate(data1.columns[1:]):
-            if i == y:
-               index[i].append(x)
-    temp = pd.Series
-    for i in index:
-        for j in index[i]:
-            temp += data1.iloc[j]
-        data1[i+'_1'] = temp
+        data1[i+'_1'] = (data1[i].sum(axis=1)/col[i]).apply(np.ceil)
+        del data1[i]
+        data1 = data1.rename(columns={i+'_1': i})
+    x = []
+    for n in data1.columns[1:]:
+        x.append(data1[n].sum(axis = 0))
+    y = pd.DataFrame(x, columns=data1.columns[1:])
+    print(x)
+    plt.hist(x)
+    plt.show
     print(data1)
-        # data1.drop(data1.columns[x for x in index[i]],axis=1,inplace=True)
-    # x = []
-    # for n in data1.columns[1:]:
-    #     x.append(data1[n].sum(axis = 0))
-    #     print(x)
-    # y = pd.DataFrame(x, columns=data1.columns[1:])
-    # print(x)
-    # plt.hist(x)
-    # plt.show
-    # print(data1)
     # # pca
     # pca = PCA(n_components=2)
     # x = pca.fit_transform(data1.iloc[:,1:-1])
