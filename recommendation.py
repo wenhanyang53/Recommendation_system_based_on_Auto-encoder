@@ -1,3 +1,5 @@
+from collections import Counter
+from collections import defaultdict
 import pandas as pd
 from sklearn import model_selection
 from sklearn.cluster import KMeans
@@ -23,17 +25,41 @@ def data_preprocess(intrests_list):
     encoded2 = pd.DataFrame(mlb.fit_transform(data['Catégorie de la manifestation'].str.split(', ')), columns=mlb.classes_)
     encoded3 = pd.DataFrame(mlb.fit_transform(data['Thème de la manifestation'].str.split(', ')), columns=mlb.classes_)
     data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
-    # print(data1.iloc[0])
-    # print(data1.iloc[:,[2]])
+    # merge duplicate columns
+    x = Counter(data1.columns[1:])
+    col = []
+    index = defaultdict(list)
+    for k in x:
+        if x[k] > 1:
+            col.append(k)
+    for i in col:
+        for x, y in enumerate(data1.columns[1:]):
+            if i == y:
+               index[i].append(x)
+    temp = pd.Series
+    for i in index:
+        for j in index[i]:
+            temp += data1.iloc[j]
+        data1[i+'_1'] = temp
     print(data1)
-    # pca
-    pca = PCA(n_components=3)
-    x = pca.fit_transform(data1.iloc[:,1:-1])
-    print(x)
-    for i in x:
-        plt.scatter(i[1], i[2])
-    plt.show()
-    # clustering features and usign k-fold validation
+        # data1.drop(data1.columns[x for x in index[i]],axis=1,inplace=True)
+    # x = []
+    # for n in data1.columns[1:]:
+    #     x.append(data1[n].sum(axis = 0))
+    #     print(x)
+    # y = pd.DataFrame(x, columns=data1.columns[1:])
+    # print(x)
+    # plt.hist(x)
+    # plt.show
+    # print(data1)
+    # # pca
+    # pca = PCA(n_components=2)
+    # x = pca.fit_transform(data1.iloc[:,1:-1])
+    # print(x)
+    # for i in x:
+    #     plt.scatter(i[0], i[1])
+    # plt.show()
+    # # clustering features and usign k-fold validation
     # kfold = model_selection.KFold(n_splits=10)
     # results_kfold = model_selection.cross_val_score(knn, x_data, np.ravel(y_data, order='C'), cv=kfold)
     # print("Accuracy: %.2f%%" % (results_kfold.mean() * 100.0))
