@@ -1,3 +1,4 @@
+import datetime
 from collections import Counter
 import numpy as np
 import pandas as pd
@@ -10,6 +11,8 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from unidecode import unidecode
+
 
 def data_preprocess():
     data = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse.csv", sep=';')
@@ -23,7 +26,8 @@ def data_preprocess():
     # extract new features from original dataset
     mlb = MultiLabelBinarizer()
     encoded1 = pd.DataFrame(mlb.fit_transform(data['Type de manifestation'].str.split(', ')), columns=mlb.classes_)
-    encoded2 = pd.DataFrame(mlb.fit_transform(data['Catégorie de la manifestation'].str.split(', ')), columns=mlb.classes_)
+    encoded2 = pd.DataFrame(mlb.fit_transform(data['Catégorie de la manifestation'].str.split(', ')),
+                            columns=mlb.classes_)
     encoded3 = pd.DataFrame(mlb.fit_transform(data['Thème de la manifestation'].str.split(', ')), columns=mlb.classes_)
     # data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
     data1 = pd.concat([encoded1, encoded2, encoded3], axis=1)
@@ -34,10 +38,15 @@ def data_preprocess():
         if x[k] > 1:
             col[k] = x[k]
     for i in col:
-        data1[i+'_1'] = (data1[i].sum(axis=1)/col[i]).apply(np.ceil)
+        data1[i + '_1'] = (data1[i].sum(axis=1) / col[i]).apply(np.ceil)
         del data1[i]
-        data1 = data1.rename(columns={i+'_1': i})
+        data1 = data1.rename(columns={i + '_1': i})
+    # unify data form to tensorflow data form
+    data1.columns = data1.columns.str.replace(' ', '_')
+    data1.columns = [unidecode(col) for col in data1.columns]
+    print(data1.columns)
     return data1
+
 
 def tensor_flow():
     data = data_preprocess()
@@ -48,53 +57,57 @@ def tensor_flow():
     batch_size = 10
     train_ds = df_to_dataset(train, batch_size=batch_size)
     test_ds = df_to_dataset(test, shuffle=False, batch_size=batch_size)
+    # create feature layer
     feature_columns = []
     for header in data.columns.values:
         feature_columns.append(tf.feature_column.numeric_column(header))
-    feature_layer = tf.keras.layers.DenseFeatures(feature_columns, input_shape=(col,))
+    feature_layer = tf.keras.layers.DenseFeatures(feature_columns)
+    # build the model
     model = tf.keras.Sequential([
         # tf.keras.layers.Dense(col, activation='relu', input_shape=(col,)),
-        feature_layer,
-        tf.keras.layers.Dense(round(col / 2), activation='relu'),
+        # feature_layer,
+        tf.keras.layers.Dense(round(col / 2), activation='relu', input_shape=(col,)),
         tf.keras.layers.Dense(round(col / 4), activation='relu'),
-        tf.keras.layers.Dense(2, name="bottleneck"),
+        tf.keras.layers.Dense(2, name="bottleneck", activation='linear'),
         tf.keras.layers.Dense(round(col / 4), activation='relu'),
         tf.keras.layers.Dense(round(col / 2), activation='relu'),
+        tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(col, activation='sigmoid')
     ])
-    print(model.summary())
-    model.compile(optimizer='adam', loss='mse')
-    history = model.fit(train_ds, train_ds, epochs=10)
-    print(model.summary())
-    encoder = tf.keras.models.Model(model.input, model.get_layer('bottleneck').output)
-    Zenc = encoder.predict(train_ds)  # bottleneck representation
-    Renc = model.predict(test_ds)  # reconstruction
+    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    # train the model
+    log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    history = model.fit(train.values, train.values, validation_data=(test.values, test.values),
+                        epochs=500, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
+    model.summary()
+    # use model to predict
+    encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
+    encoded = encoder.predict(test.values)  # bottleneck representation
+    Renc = model.predict(test.values)  # reconstruction
+    plt.subplot(122)
+    plt.title('Autoencoder')
+    plt.scatter(encoded[:, 0], encoded[:, 1], s=8)
+    plt.gca().get_xaxis().set_ticklabels([])
+    plt.gca().get_yaxis().set_ticklabels([])
+    plt.show()
 
-    plt.figure(figsize=(9, 3))
-    toPlot = (train_ds, Renc)
-    for i in range(10):
-        for j in range(3):
-            ax = plt.subplot(3, 10, 10 * j + i + 1)
-            plt.imshow(toPlot[j][i, :].reshape(28, 28), interpolation="nearest",
-                       vmin=0, vmax=1)
-            plt.gray()
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
-
-    plt.tight_layout()
-
+# transfer dataframe to tensorflow dataset(useless)
 def df_to_dataset(dataframe, shuffle=True, batch_size=32):
-  dataframe = dataframe.copy()
-  ds = tf.data.Dataset.from_tensor_slices(dict(dataframe))
-  if shuffle:
-    ds = ds.shuffle(buffer_size=len(dataframe))
-  ds = ds.batch(batch_size)
-  return ds
+    dataframe = dataframe.copy()
+    ds = tf.data.Dataset.from_tensor_slices(
+        tf.cast(dataframe.values, tf.float32)
+    )
+    if shuffle:
+        ds = ds.shuffle(buffer_size=len(dataframe))
+    ds = ds.batch(batch_size)
+    return ds
+
 
 def k_means():
     # pca
     pca = PCA(n_components=2)
-    x = pca.fit_transform(data1.iloc[:,1:-1])
+    x = pca.fit_transform(data1.iloc[:, 1:-1])
     print(x)
     for i in x:
         plt.scatter(i[0], i[1])
@@ -104,12 +117,13 @@ def k_means():
     results_kfold = model_selection.cross_val_score(knn, x_data, np.ravel(y_data, order='C'), cv=kfold)
     print("Accuracy: %.2f%%" % (results_kfold.mean() * 100.0))
     kmeans = KMeans(n_clusters=5, random_state=53)
-    labels = kmeans.fit_predict(data1.iloc[[1],[2]])
+    labels = kmeans.fit_predict(data1.iloc[[1], [2]])
     print(labels)
+
 
 def suggestion():
     if not (var1.get() or var2.get() or var3.get() or var4.get() or var5.get() or var6.get()
-        or var7.get()):
+            or var7.get()):
         messagebox.showerror("You have not selected a interest!")
     intrests_list = []
     if var1.get():
@@ -128,10 +142,11 @@ def suggestion():
         intrests_list.append('Nature et détente')
     data_preprocess(intrests_list)
 
+
 if __name__ == "__main__":
     tensor_flow()
 
-#build user interface
+# build user interface
 # window = tk.Tk()
 # window.title("Toulouse Go Out!")
 # intrests = tk.LabelFrame(window, text="Choose your intrests", font='Calibri 12 bold', padx=5, pady=5)
