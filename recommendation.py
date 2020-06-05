@@ -76,10 +76,10 @@ def tensor_flow():
     ])
     model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     # train the model
-    log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     history = model.fit(train.values, train.values, validation_data=(test.values, test.values),
-                        epochs=500, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
+                        epochs=50, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
     model.summary()
     # use model to predict
     encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
