@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn import model_selection
 from sklearn.model_selection import train_test_split
 from sklearn.cluster import KMeans
-import tkinter as tk
+from tkinter import *
 from tkinter import messagebox
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.decomposition import PCA
@@ -20,7 +20,7 @@ def data_preprocess():
     data['Catégorie de la manifestation'] = data['Catégorie de la manifestation'].fillna('Unspecifiled_2')
     data['Thème de la manifestation'] = data['Thème de la manifestation'].fillna('Unspecifiled_3')
     # for i, m in enumerate(data['Type de manifestation']):
-    #     for n in intrests_list:
+    #     for n in interests_list:
     #             if m.find(n) != -1:
     #                 print(data.iloc[i])
     # extract new features from original dataset
@@ -29,8 +29,8 @@ def data_preprocess():
     encoded2 = pd.DataFrame(mlb.fit_transform(data['Catégorie de la manifestation'].str.split(', ')),
                             columns=mlb.classes_)
     encoded3 = pd.DataFrame(mlb.fit_transform(data['Thème de la manifestation'].str.split(', ')), columns=mlb.classes_)
-    # data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
-    data1 = pd.concat([encoded1, encoded2, encoded3], axis=1)
+    data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
+    # data1 = pd.concat([encoded1, encoded2, encoded3], axis=1)
     # merge duplicate columns
     x = Counter(data1.columns[1:])
     col = {}
@@ -41,6 +41,11 @@ def data_preprocess():
         data1[i + '_1'] = (data1[i].sum(axis=1) / col[i]).apply(np.ceil)
         del data1[i]
         data1 = data1.rename(columns={i + '_1': i})
+    return data1
+
+
+def tf_unify():
+    data1 = data_preprocess()
     # unify data form to tensorflow data form
     data1.columns = data1.columns.str.replace(' ', '_')
     data1.columns = [unidecode(col) for col in data1.columns]
@@ -49,7 +54,8 @@ def data_preprocess():
 
 
 def tensor_flow():
-    data = data_preprocess()
+    data = tf_unify
+    del data['Identifiant']
     row, col = data.shape
     train, test = train_test_split(data, test_size=0.2)
     print(len(train), 'train examples')
@@ -79,18 +85,10 @@ def tensor_flow():
     log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     history = model.fit(train.values, train.values, validation_data=(test.values, test.values),
-                        epochs=50, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
+                        epochs=1000, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
     model.summary()
-    # use model to predict
-    encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
-    encoded = encoder.predict(test.values)  # bottleneck representation
-    Renc = model.predict(test.values)  # reconstruction
-    plt.subplot(122)
-    plt.title('Autoencoder')
-    plt.scatter(encoded[:, 0], encoded[:, 1], s=8)
-    plt.gca().get_xaxis().set_ticklabels([])
-    plt.gca().get_yaxis().set_ticklabels([])
-    plt.show()
+    model.save('my_model_1')
+
 
 # transfer dataframe to tensorflow dataset(useless)
 def df_to_dataset(dataframe, shuffle=True, batch_size=32):
@@ -104,73 +102,65 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32):
     return ds
 
 
-def k_means():
+def tf_suggest():
+    data = data_preprocess()
+    if not var:
+        messagebox.showerror("You have not selected a interest!")
+    interests = []
+    for i in range(len(var)):
+        if var[list(var)[i]].get():
+            interests.append(1)
+        else:
+            interests.append(0)
+    interests = [interests]
+    model = tf.keras.models.load_model('my_model')
+    # use model to predict
+    encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
+    encoded = encoder.predict(data.iloc[:, 1:len(data.columns)])  # bottleneck representation
+    interests_enco = encoder.predict(np.array(interests))  # user's interests encoding
     # pca
     pca = PCA(n_components=2)
-    x = pca.fit_transform(data1.iloc[:, 1:-1])
-    print(x)
-    for i in x:
-        plt.scatter(i[0], i[1])
+    encoder_pca = pca.fit_transform(data.iloc[:, 1:-1])
+    print(encoder_pca.shape)
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.scatter(encoder_pca[:, 0], encoder_pca[:, 1])
+    plt.title('PCA')
+    plt.subplot(1, 2, 2)
+    plt.scatter(encoded[:, 0], encoded[:, 1], s=8)
+    plt.scatter(interests[0][0], interests[0][1], color='red')
+    plt.title('Autoencoder')
     plt.show()
-    # clustering features and usign k-fold validation
-    kfold = model_selection.KFold(n_splits=10)
-    results_kfold = model_selection.cross_val_score(knn, x_data, np.ravel(y_data, order='C'), cv=kfold)
-    print("Accuracy: %.2f%%" % (results_kfold.mean() * 100.0))
-    kmeans = KMeans(n_clusters=5, random_state=53)
-    labels = kmeans.fit_predict(data1.iloc[[1], [2]])
-    print(labels)
-
-
-def suggestion():
-    if not (var1.get() or var2.get() or var3.get() or var4.get() or var5.get() or var6.get()
-            or var7.get()):
-        messagebox.showerror("You have not selected a interest!")
-    intrests_list = []
-    if var1.get():
-        intrests_list.append('Musique')
-    if var2.get():
-        intrests_list.append('Culturelle')
-    if var3.get():
-        intrests_list.append('Insolite')
-    if var4.get():
-        intrests_list.append('Danse')
-    if var5.get():
-        intrests_list.append('Manifestation commerciale')
-    if var6.get():
-        intrests_list.append('Sports et loisirs')
-    if var7.get():
-        intrests_list.append('Nature et détente')
-    data_preprocess(intrests_list)
+    # suggest by distance
+    dist = []
+    for i in encoded:
+        dist.append(np.sqrt(np.sum(np.square(i - interests_enco[0]))))
+    data = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse.csv", sep=';')
+    for m, n in enumerate(dist):
+        if n < 5:
+            print(data.iloc[m])
 
 
 if __name__ == "__main__":
-    tensor_flow()
-
-# build user interface
-# window = tk.Tk()
-# window.title("Toulouse Go Out!")
-# intrests = tk.LabelFrame(window, text="Choose your intrests", font='Calibri 12 bold', padx=5, pady=5)
-# var1 = tk.IntVar()
-# c1 = tk.Checkbutton(window, text='Musique', variable=var1)
-# c1.pack()
-# var2 = tk.IntVar()
-# c2 = tk.Checkbutton(window, text='Culturelle', variable=var2)
-# c2.pack()
-# var3 = tk.IntVar()
-# c3 = tk.Checkbutton(window, text='Insolite', variable=var3)
-# c3.pack()
-# var4 = tk.IntVar()
-# c4 = tk.Checkbutton(window, text='Danse', variable=var4)
-# c4.pack()
-# var5 = tk.IntVar()
-# c5 = tk.Checkbutton(window, text='Manifestation commerciale', variable=var5)
-# c5.pack()
-# var6 = tk.IntVar()
-# c6 = tk.Checkbutton(window, text='Sports et loisirs', variable=var6)
-# c6.pack()
-# var7 = tk.IntVar()
-# c7 = tk.Checkbutton(window, text='Nature et détente', variable=var7)
-# c7.pack()
-# button = tk.Button(window, text="Show me events", command=suggestion)
-# button.pack()
-# window.mainloop()
+    # tensor_flow()
+    # build user interface
+    data = data_preprocess()
+    window = Tk()
+    window.title("Toulouse Go Out!")
+    interests = LabelFrame(window, text="Choose your interests", font='Calibri 12 bold')
+    var = {}
+    row = 1
+    column = 0
+    for i in range(len(data.columns) - 1):
+        var[data.columns[i + 1]] = IntVar()
+        c = Checkbutton(window, text=data.columns[i + 1], variable=var[data.columns[i + 1]])
+        if i % 5 == 0:
+            row += 1
+            column = 0
+            c.grid(row=row, column=column)
+        else:
+            column += 1
+            c.grid(row=row, column=column)
+    button = Button(window, text="Show me events", command=tf_suggest)
+    button.grid(row=row+2, column=2)
+    window.mainloop()
