@@ -118,6 +118,7 @@ def tf_suggest():
     encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
     encoded = encoder.predict(data.iloc[:, 1:len(data.columns)])  # bottleneck representation
     interests_enco = encoder.predict(np.array(interests))  # user's interests encoding
+    print(interests_enco)
     # pca
     pca = PCA(n_components=2)
     encoder_pca = pca.fit_transform(data.iloc[:, 1:-1])
@@ -128,7 +129,7 @@ def tf_suggest():
     plt.title('PCA')
     plt.subplot(1, 2, 2)
     plt.scatter(encoded[:, 0], encoded[:, 1], s=8)
-    plt.scatter(interests[0][0], interests[0][1], color='red')
+    plt.scatter(interests_enco[0][0], interests_enco[0][1], color='red')
     plt.title('Autoencoder')
     plt.show()
     # suggest by distance
@@ -136,9 +137,12 @@ def tf_suggest():
     for i in encoded:
         dist.append(np.sqrt(np.sum(np.square(i - interests_enco[0]))))
     data = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse.csv", sep=';')
+    num = 0
     for m, n in enumerate(dist):
-        if n < 5:
+        if n < 3:
+            num += 1
             print(data.iloc[m])
+    print('The number of events are ' + str(num))
 
 
 if __name__ == "__main__":
