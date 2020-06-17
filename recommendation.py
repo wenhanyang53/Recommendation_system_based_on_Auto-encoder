@@ -2,9 +2,7 @@ import datetime
 from collections import Counter
 import numpy as np
 import pandas as pd
-from sklearn import model_selection
 from sklearn.model_selection import train_test_split
-from sklearn.cluster import KMeans
 from tkinter import *
 from tkinter import messagebox
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -15,7 +13,12 @@ from unidecode import unidecode
 
 
 def data_preprocess():
-    data = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse.csv", sep=';')
+    data_1 = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse.csv", sep=';')
+    data_2 = pd.read_csv("agenda-des-manifestations-culturelles-so-toulouse_1.csv", sep=';')
+    data = pd.concat([data_1, data_2], axis=0)
+    data = data.drop_duplicates(subset='Identifiant', keep="last")
+    data = data.reset_index(drop=True)
+    print(data)
     data['Type de manifestation'] = data['Type de manifestation'].fillna('Unspecifiled_1')
     data['Catégorie de la manifestation'] = data['Catégorie de la manifestation'].fillna('Unspecifiled_2')
     data['Thème de la manifestation'] = data['Thème de la manifestation'].fillna('Unspecifiled_3')
@@ -25,10 +28,12 @@ def data_preprocess():
     #                 print(data.iloc[i])
     # extract new features from original dataset
     mlb = MultiLabelBinarizer()
-    encoded1 = pd.DataFrame(mlb.fit_transform(data['Type de manifestation'].str.split(', ')), columns=mlb.classes_)
+    encoded1 = pd.DataFrame(mlb.fit_transform(data['Type de manifestation'].str.split(', ')),
+                            columns=mlb.classes_)
     encoded2 = pd.DataFrame(mlb.fit_transform(data['Catégorie de la manifestation'].str.split(', ')),
                             columns=mlb.classes_)
-    encoded3 = pd.DataFrame(mlb.fit_transform(data['Thème de la manifestation'].str.split(', ')), columns=mlb.classes_)
+    encoded3 = pd.DataFrame(mlb.fit_transform(data['Thème de la manifestation'].str.split(', ')),
+                            columns=mlb.classes_)
     data1 = pd.concat([data['Identifiant'], encoded1, encoded2, encoded3], axis=1)
     # data1 = pd.concat([encoded1, encoded2, encoded3], axis=1)
     # merge duplicate columns
@@ -41,12 +46,15 @@ def data_preprocess():
         data1[i + '_1'] = (data1[i].sum(axis=1) / col[i]).apply(np.ceil)
         del data1[i]
         data1 = data1.rename(columns={i + '_1': i})
+    pd.options.display.max_columns = 8
+    pd.options.display.width = 200
+    print(data1)
     return data1
 
 
+# unify data form to tensorflow data form
 def tf_unify():
     data1 = data_preprocess()
-    # unify data form to tensorflow data form
     data1.columns = data1.columns.str.replace(' ', '_')
     data1.columns = [unidecode(col) for col in data1.columns]
     print(data1.columns)
@@ -54,7 +62,7 @@ def tf_unify():
 
 
 def tensor_flow():
-    data = tf_unify
+    data = tf_unify()
     del data['Identifiant']
     row, col = data.shape
     train, test = train_test_split(data, test_size=0.2)
@@ -87,7 +95,7 @@ def tensor_flow():
     history = model.fit(train.values, train.values, validation_data=(test.values, test.values),
                         epochs=1000, shuffle=True, batch_size=5, callbacks=[tensorboard_callback])
     model.summary()
-    model.save('my_model_1')
+    model.save('my_model_2')
 
 
 # transfer dataframe to tensorflow dataset(useless)
@@ -147,6 +155,7 @@ def tf_suggest():
 
 if __name__ == "__main__":
     # tensor_flow()
+
     # build user interface
     data = data_preprocess()
     window = Tk()
