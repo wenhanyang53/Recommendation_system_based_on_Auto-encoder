@@ -162,7 +162,7 @@ def tf_suggest():
         # if n < 5:
         if n < 0.00025:
             num += 1
-            print(data.iloc[m])
+            print(data.iloc[m])  # here I print the events, you can display in the interface
     print('The number of events are ' + str(num))
 
 def events():
@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     # build user interface
     data, data1 = data_preprocess()
-    event_list = events()
+    event_list = events() #give you a list of events that include 2 events in each type of events
     window = Tk()
     window.title("Toulouse Go Out!")
     interests = LabelFrame(window, text="Choose your events", font='Calibri 12 bold')
