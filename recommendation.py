@@ -56,7 +56,7 @@ def data_preprocess():
     data2 = pd.concat([data['Identifiant'], data2], axis=1)
     print(data2)
     data3 = pd.concat([data1, data2], axis=1)
-    return data, data2
+    return data, data2  #return data and data1 using model_1, return data and data2 using model_3
 
 
 # unify data form to tensorflow data form
@@ -130,7 +130,7 @@ def tf_suggest():
         for m in events:
             if j==m:
                 index.append(i)
-    model = tf.keras.models.load_model('my_model_3')
+    model = tf.keras.models.load_model('my_model_3')  #change model based on return value of data_preprocess
     # use model to predict
     encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
     encoded = encoder.predict(data1.iloc[:, 1:len(data1.columns)])  # bottleneck representation
