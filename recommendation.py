@@ -135,7 +135,7 @@ def tf_suggest():
     encoder = tf.keras.models.Model(inputs=model.input, outputs=model.get_layer('bottleneck').output)
     encoded = encoder.predict(data1.iloc[:, 1:len(data1.columns)])  # bottleneck representation
     # interests_enco = encoder.predict(np.array(events))  # user's interests encoding
-    # print(interests_enco)
+    # get the centroid coordiante of all the events
     event_encoded = []
     for i, j in enumerate(encoded):
         for m in index:
@@ -146,7 +146,7 @@ def tf_suggest():
         x += i[0]
         y += i[1]
     centroid = [x/len(event_encoded), y/len(event_encoded)]
-    plt.figure(figsize=(20, 10))
+    plt.figure(figsize=(15, 10))
     plt.scatter(encoded[:, 0], encoded[:, 1], s=8)
     for i in event_encoded:
         plt.scatter(i[0], i[1], color='orange')
